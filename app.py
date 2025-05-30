@@ -1,4 +1,4 @@
-# app.py (Conceptual state after Commit 2)
+# app.py (Conceptual state after Commit 3)
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Blueprint, make_response
 from flask_sqlalchemy import SQLAlchemy
 
@@ -32,7 +32,6 @@ class Tag(db.Model):
 # --- API Blueprint Definition ---
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 
-# Helper function to serialize Todo with tags
 def serialize_todo(todo):
     return {
         'id': todo.id,
@@ -46,6 +45,59 @@ def api_get_todos():
     todos = Todo.query.all()
     output = [serialize_todo(todo) for todo in todos]
     return jsonify({'todos': output}), 200
+
+@api_bp.route('/todos/<int:todo_id>', methods=['GET'])
+def api_get_todo(todo_id):
+    todo = db.session.get(Todo, todo_id)
+    if not todo:
+        return jsonify({'message': 'Todo not found'}), 404
+    return jsonify(serialize_todo(todo)), 200
+
+@api_bp.route('/todos', methods=['POST'])
+def api_create_todo():
+    data = request.get_json()
+    if not data or not 'title' in data or not data['title'].strip():
+        return jsonify({'message': 'Missing title'}), 400
+
+    new_todo = Todo(title=data['title'].strip(), complete=data.get('complete', False))
+    # No tag handling here yet
+    db.session.add(new_todo)
+    db.session.commit()
+    return jsonify(serialize_todo(new_todo)), 201
+
+@api_bp.route('/todos/<int:todo_id>', methods=['PUT', 'PATCH'])
+def api_update_todo(todo_id):
+    todo = db.session.get(Todo, todo_id)
+    if not todo:
+        return jsonify({'message': 'Todo not found'}), 404
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'message': 'No data provided for update'}), 400
+
+    if 'title' in data:
+        if not data['title'].strip():
+            return jsonify({'message': 'Title cannot be empty'}), 400
+        todo.title = data['title'].strip()
+    if 'complete' in data:
+        if isinstance(data['complete'], bool):
+            todo.complete = data['complete']
+        else: # pragma: no cover
+            return jsonify({'message': 'Complete status must be a boolean'}), 400 # pragma: no cover
+    # No tag handling here yet
+
+    db.session.commit()
+    return jsonify(serialize_todo(todo)), 200
+
+@api_bp.route('/todos/<int:todo_id>', methods=['DELETE'])
+def api_delete_todo(todo_id):
+    todo = db.session.get(Todo, todo_id)
+    if not todo:
+        return jsonify({'message': 'Todo not found'}), 404
+
+    db.session.delete(todo)
+    db.session.commit()
+    return make_response('', 204)
 
 # Other API routes not yet here
 
