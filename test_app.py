@@ -28,6 +28,23 @@ def client():
     with app.test_client() as client:
         yield client
 
+# --- Tests for __repr__ methods (lines 25, 32 in app.py) ---
+def test_todo_repr(client):
+    with app.app_context():
+        todo = Todo(title="Test Repr Todo", complete=False)
+        db.session.add(todo)
+        db.session.commit()
+        # This calls the __repr__ method
+        assert repr(todo) == f"<Todo {todo.id}: Test Repr Todo>"
+
+def test_tag_repr(client):
+    with app.app_context():
+        tag = Tag(name="testreprtag")
+        db.session.add(tag)
+        db.session.commit()
+        # This calls the __repr__ method
+        assert repr(tag) == "<Tag testreprtag>"
+
 # --- Test Cases for REST API (api_bp) ---
 
 # Test API Read (GET /api/v1/todos)
@@ -79,11 +96,14 @@ def test_api_create_todo_invalid_data(client):
 
     response = client.post('/api/v1/todos', json={'title': ''}) # Test empty string
     assert response.status_code == 400
-    assert 'Missing title' in response.json['message'] # Assertion fixed to match current app.py
+    assert 'Missing title' in response.json['message']
 
+def test_api_create_todo_invalid_tags_format(client): # Covers app.py lines 54-58
+    """Test creating a todo with tags provided but not as a list (Negative Case)."""
     response = client.post('/api/v1/todos', json={'title': 'test', 'tags': 'not_a_list'})
     assert response.status_code == 400
     assert 'Tags must be a list of strings' in response.json['message']
+
 
 def test_api_get_nonexistent_todo(client):
     """Test getting a todo that does not exist (Negative Case)."""
@@ -106,9 +126,9 @@ def test_api_update_todo_title_and_complete(client):
     assert update_response.json['title'] == 'Updated Todo'
     assert update_response.json['complete'] == True
 
-    # Verify in DB
+    # Verify in DB - CHANGED: Use db.session.get()
     with app.app_context():
-        updated_todo = Todo.query.get(todo_id)
+        updated_todo = db.session.get(Todo, todo_id)
         assert updated_todo.title == 'Updated Todo'
         assert updated_todo.complete == True
 
@@ -130,9 +150,9 @@ def test_api_update_todo_tags(client):
     assert 'new_tag1' in update_response.json['tags']
     assert 'new_tag2' in update_response.json['tags']
 
-    # Verify in DB
+    # Verify in DB - CHANGED: Use db.session.get()
     with app.app_context():
-        updated_todo = Todo.query.get(todo_id)
+        updated_todo = db.session.get(Todo, todo_id)
         assert len(updated_todo.tags) == 2
         assert any(tag.name == 'new_tag1' for tag in updated_todo.tags)
         assert any(tag.name == 'new_tag2' for tag in updated_todo.tags)
@@ -148,18 +168,27 @@ def test_api_update_todo_invalid_data(client):
     create_response = client.post('/api/v1/todos', json={'title': 'Original Todo'})
     todo_id = create_response.json['id']
 
-    response = client.patch(f'/api/v1/todos/{todo_id}', json={'complete': 'not_a_bool'})
-    assert response.status_code == 400
-    assert 'Complete status must be a boolean' in response.json['message']
-
-    response = client.patch(f'/api/v1/todos/{todo_id}', json={'tags': 'not_a_list'})
-    assert response.status_code == 400
-    assert 'Tags must be a list of strings' in response.json['message']
-
     response = client.patch(f'/api/v1/todos/{todo_id}', json={'title': ''}) # Test empty title on update
     assert response.status_code == 400
     assert 'Title cannot be empty' in response.json['message']
 
+def test_api_update_todo_invalid_complete_format(client): # Covers app.py line 227
+    """Test updating todo with complete status not a boolean (Negative Case)."""
+    create_response = client.post('/api/v1/todos', json={'title': 'Original Todo'})
+    todo_id = create_response.json['id']
+
+    response = client.patch(f'/api/v1/todos/{todo_id}', json={'complete': 'not_a_bool'})
+    assert response.status_code == 400
+    assert 'Complete status must be a boolean' in response.json['message']
+
+def test_api_update_todo_invalid_tags_format(client): # Covers app.py line 237
+    """Test updating todo with tags provided but not as a list (Negative Case)."""
+    create_response = client.post('/api/v1/todos', json={'title': 'Original Todo'})
+    todo_id = create_response.json['id']
+
+    response = client.patch(f'/api/v1/todos/{todo_id}', json={'tags': 'not_a_list'})
+    assert response.status_code == 400
+    assert 'Tags must be a list of strings' in response.json['message']
 
 # Test API Delete (DELETE /api/v1/todos/<id>)
 def test_api_delete_todo(client):
@@ -170,7 +199,7 @@ def test_api_delete_todo(client):
     response = client.delete(f'/api/v1/todos/{todo_id}')
     assert response.status_code == 204 # No Content
 
-    # Verify it's deleted
+    # Verify it's deleted - CHANGED: Use db.session.get()
     get_response = client.get(f'/api/v1/todos/{todo_id}')
     assert get_response.status_code == 404
 
@@ -201,18 +230,17 @@ def test_api_create_tag_duplicate(client):
     assert response.status_code == 409
     assert 'Tag with this name already exists' in response.json['message']
 
-def test_api_create_tag_missing_name(client):
+def test_api_create_tag_missing_name(client): # Covers app.py line 269 (part 1)
     """Test creating a tag with missing name (Negative Case)."""
     response = client.post('/api/v1/tags', json={})
     assert response.status_code == 400
-    assert 'Missing tag name' in response.json['message'] # Updated assertion
+    assert 'Missing tag name' in response.json['message']
 
-
-def test_api_create_tag_empty_name_after_strip(client):
+def test_api_create_tag_empty_name(client): # Covers app.py line 269 (part 2)
     """Test creating a tag with a name that is empty after stripping (Negative Case)."""
     response = client.post('/api/v1/tags', json={'name': '   '})
     assert response.status_code == 400
-    assert 'Missing tag name' in response.json['message'] # Updated assertion
+    assert 'Missing tag name' in response.json['message']
 
 
 # Test API Read Tags (GET /api/v1/tags)
@@ -252,7 +280,7 @@ def test_api_delete_tag_and_associations(client):
 
     # Get the tag's ID
     with app.app_context():
-        tag = Tag.query.filter_by(name='removable_tag').first()
+        tag = Tag.query.filter_by(name='removable_tag').first() # Query by name, so filter_by is correct
         assert tag is not None
         tag_id = tag.id
 
@@ -260,7 +288,7 @@ def test_api_delete_tag_and_associations(client):
     delete_response = client.delete(f'/api/v1/tags/{tag_id}')
     assert delete_response.status_code == 204
 
-    # Verify todo no longer has the tag
+    # Verify todo no longer has the tag - CHANGED: Use db.session.get()
     get_todo_response = client.get(f'/api/v1/todos/{todo_id}')
     assert get_todo_response.status_code == 200
     assert 'removable_tag' not in get_todo_response.json['tags']
@@ -310,7 +338,7 @@ def test_web_update_status(client):
     response = client.get(f'/update_status/{todo_id}', follow_redirects=True)
     assert response.status_code == 200
     with app.app_context():
-        updated_todo = Todo.query.get(todo_id)
+        updated_todo = db.session.get(Todo, todo_id) # CHANGED: Use db.session.get()
         assert updated_todo.complete == True
     assert b'Mark Incomplete' in response.data # Button text should change
 
@@ -331,17 +359,14 @@ def test_web_update_todo_details(client):
     assert b'<a class="ui tag label" href="/filter_by_tag/new_web_tag1">new_web_tag1</a>' in response.data
     assert b'<a class="ui tag label" href="/filter_by_tag/new_web_tag2">new_web_tag2</a>' in response.data
 
-    # After update, verify the database state directly
+    # After update, verify the database state directly - CHANGED: Use db.session.get()
     with app.app_context():
-        updated_todo = Todo.query.get(todo_id)
+        updated_todo = db.session.get(Todo, todo_id)
         assert updated_todo.title == 'New Web Todo Title'
         assert len(updated_todo.tags) == 2
         assert any(t.name == 'new_web_tag1' for t in updated_todo.tags)
         assert any(t.name == 'new_web_tag2' for t in updated_todo.tags)
-        assert not any(t.name == 'old_tag' for t in updated_todo.tags) # Verify old tag is gone from DB object
-
-    # Removing the negative assertion for b'old_tag' in response.data
-    # as the database verification is the primary and more reliable check for this.
+        assert not any(t.name == 'old_tag' for t in updated_todo.tags)
 
 def test_web_update_todo_details_empty_title(client):
     """Test updating todo details with empty title via web UI (Negative Case)."""
@@ -367,7 +392,7 @@ def test_web_delete_todo(client):
     assert b'Delete Me' not in response.data # Ensure todo is no longer displayed
 
     with app.app_context():
-        deleted_todo = Todo.query.get(todo_id)
+        deleted_todo = db.session.get(Todo, todo_id) # CHANGED: Use db.session.get()
         assert deleted_todo is None
 
 def test_web_filter_by_tag(client):
@@ -404,10 +429,10 @@ def test_web_delete_tag(client):
 
     # Verify that Todo A no longer has this tag association
     with app.app_context():
-        todo_a = Todo.query.filter_by(title='Todo A').first()
+        todo_a = Todo.query.filter_by(title='Todo A').first() # Query by title, so filter_by is correct
         assert not any(t.name == 'tag_to_delete' for t in todo_a.tags)
         # Ensure another_tag is still there
-        another_tag_obj = Tag.query.filter_by(name='another_tag').first()
+        another_tag_obj = Tag.query.filter_by(name='another_tag').first() # Query by name, so filter_by is correct
         assert another_tag_obj is not None
 
 
@@ -449,3 +474,11 @@ def test_api_update_todo_no_data(client):
     response = client.patch(f'/api/v1/todos/{todo_id}', json={})
     assert response.status_code == 400
     assert 'No data provided for update' in response.json['message']
+
+# This test now uses the updated assertion message
+# (No change to this test function content needed from last iteration, just a note)
+def test_api_create_tag_empty_name_after_strip(client):
+    """Test creating a tag with a name that is empty after stripping (Negative Case)."""
+    response = client.post('/api/v1/tags', json={'name': '   '})
+    assert response.status_code == 400
+    assert 'Missing tag name' in response.json['message']

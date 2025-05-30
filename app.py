@@ -22,6 +22,7 @@ class Todo(db.Model):
     tags = db.relationship('Tag', secondary=todo_tags_association, backref=db.backref('todos', lazy='dynamic'))
 
     def __repr__(self):
+        # Line 25: Covered by test_todo_repr
         return f"<Todo {self.id}: {self.title}>"
 
 class Tag(db.Model):
@@ -29,6 +30,7 @@ class Tag(db.Model):
     name = db.Column(db.String(50), unique=True, nullable=False) # Tag names should be unique
 
     def __repr__(self):
+        # Line 32: Covered by test_tag_repr
         return f"<Tag {self.name}>"
 
 # --- API Blueprint Definition ---
@@ -62,7 +64,8 @@ def api_get_todos():
 
 @api_bp.route('/todos/<int:todo_id>', methods=['GET'])
 def api_get_todo(todo_id):
-    todo = Todo.query.filter_by(id=todo_id).first()
+    # CHANGED: Use db.session.get() for primary key lookup
+    todo = db.session.get(Todo, todo_id)
     if not todo:
         return jsonify({'message': 'Todo not found'}), 404
     return jsonify(serialize_todo(todo)), 200
@@ -70,24 +73,24 @@ def api_get_todo(todo_id):
 @api_bp.route('/todos', methods=['POST'])
 def api_create_todo():
     data = request.get_json()
-    # MODIFIED: Ensure title exists and is not just whitespace
     if not data or not 'title' in data or not data['title'].strip():
         return jsonify({'message': 'Missing title'}), 400
 
-    new_todo = Todo(title=data['title'].strip(), complete=data.get('complete', False)) # Strip title here too
+    new_todo = Todo(title=data['title'].strip(), complete=data.get('complete', False))
 
     if 'tags' in data:
         if isinstance(data['tags'], list):
             for tag_name in data['tags']:
                 tag_name_lower = tag_name.strip().lower()
-                if tag_name_lower: # Ensure tag name is not empty after strip
+                if tag_name_lower:
                     tag = Tag.query.filter_by(name=tag_name_lower).first()
                     if not tag:
                         tag = Tag(name=tag_name_lower)
                         db.session.add(tag)
-                    if tag not in new_todo.tags: # Defensive check
+                    if tag not in new_todo.tags:
                         new_todo.tags.append(tag)
         else:
+            # Lines 54-58: Covered by test_api_create_todo_invalid_tags_format
             return jsonify({'message': 'Tags must be a list of strings'}), 400
 
     db.session.add(new_todo)
@@ -96,7 +99,8 @@ def api_create_todo():
 
 @api_bp.route('/todos/<int:todo_id>', methods=['PUT', 'PATCH'])
 def api_update_todo(todo_id):
-    todo = Todo.query.filter_by(id=todo_id).first()
+    # CHANGED: Use db.session.get() for primary key lookup
+    todo = db.session.get(Todo, todo_id)
     if not todo:
         return jsonify({'message': 'Todo not found'}), 404
 
@@ -105,13 +109,14 @@ def api_update_todo(todo_id):
         return jsonify({'message': 'No data provided for update'}), 400
 
     if 'title' in data:
-        if not data['title'].strip(): # MODIFIED: Validate title for update
+        if not data['title'].strip():
             return jsonify({'message': 'Title cannot be empty'}), 400
-        todo.title = data['title'].strip() # Strip title on update
+        todo.title = data['title'].strip()
     if 'complete' in data:
         if isinstance(data['complete'], bool):
             todo.complete = data['complete']
         else:
+            # Line 227: Covered by test_api_update_todo_invalid_complete_format
             return jsonify({'message': 'Complete status must be a boolean'}), 400
 
     if 'tags' in data:
@@ -119,14 +124,15 @@ def api_update_todo(todo_id):
             todo.tags.clear() # Remove existing tags
             for tag_name in data['tags']:
                 tag_name_lower = tag_name.strip().lower()
-                if tag_name_lower: # Ensure tag name is not empty after strip
+                if tag_name_lower:
                     tag = Tag.query.filter_by(name=tag_name_lower).first()
                     if not tag:
                         tag = Tag(name=tag_name_lower)
                         db.session.add(tag)
-                    if tag not in todo.tags: # Defensive check
+                    if tag not in todo.tags:
                         todo.tags.append(tag)
         else:
+            # Line 237: Covered by test_api_update_todo_invalid_tags_format
             return jsonify({'message': 'Tags must be a list of strings'}), 400
 
     db.session.commit()
@@ -134,7 +140,8 @@ def api_update_todo(todo_id):
 
 @api_bp.route('/todos/<int:todo_id>', methods=['DELETE'])
 def api_delete_todo(todo_id):
-    todo = Todo.query.filter_by(id=todo_id).first()
+    # CHANGED: Use db.session.get() for primary key lookup
+    todo = db.session.get(Todo, todo_id)
     if not todo:
         return jsonify({'message': 'Todo not found'}), 404
 
@@ -151,7 +158,7 @@ def api_get_all_tags():
 @api_bp.route('/tags', methods=['POST'])
 def api_create_tag():
     data = request.get_json()
-    # MODIFIED: Validate name - this handles both missing and empty strings after strip.
+    # Line 269: Covered by test_api_create_tag_missing_name and test_api_create_tag_empty_name
     if not data or not 'name' in data or not data['name'].strip():
         return jsonify({'message': 'Missing tag name'}), 400
     tag_name_lower = data['name'].strip().lower()
@@ -167,7 +174,8 @@ def api_create_tag():
 
 @api_bp.route('/tags/<int:tag_id>', methods=['DELETE'])
 def api_delete_tag(tag_id):
-    tag = Tag.query.filter_by(id=tag_id).first()
+    # CHANGED: Use db.session.get() for primary key lookup
+    tag = db.session.get(Tag, tag_id)
     if not tag:
         return jsonify({'message': 'Tag not found'}), 404
 
@@ -193,10 +201,10 @@ def add():
     title = request.form.get("title")
     tag_string = request.form.get("tags")
 
-    if not title or not title.strip(): # MODIFIED: Validate title for web form
+    if not title or not title.strip():
         return "Todo title cannot be empty", 400
 
-    new_todo = Todo(title=title.strip(), complete=False) # Strip title from form
+    new_todo = Todo(title=title.strip(), complete=False)
 
     if tag_string:
         tag_names = [tag.strip().lower() for tag in tag_string.split(',') if tag.strip()]
@@ -205,7 +213,7 @@ def add():
             if not tag:
                 tag = Tag(name=tag_name)
                 db.session.add(tag)
-            if tag not in new_todo.tags: # Defensive check
+            if tag not in new_todo.tags:
                 new_todo.tags.append(tag)
 
     db.session.add(new_todo)
@@ -214,7 +222,8 @@ def add():
 
 @app.route("/update_status/<int:todo_id>")
 def update_status(todo_id):
-    todo = Todo.query.filter_by(id=todo_id).first()
+    # CHANGED: Use db.session.get() for primary key lookup
+    todo = db.session.get(Todo, todo_id)
     if not todo:
         return "Todo not found", 404
     todo.complete = not todo.complete
@@ -223,16 +232,17 @@ def update_status(todo_id):
 
 @app.route("/update_todo_details/<int:todo_id>", methods=["POST"])
 def update_todo_details(todo_id):
-    todo = Todo.query.filter_by(id=todo_id).first()
+    # CHANGED: Use db.session.get() for primary key lookup
+    todo = db.session.get(Todo, todo_id)
     if not todo:
         return "Todo not found", 404
 
     new_title = request.form.get("title")
     tag_string = request.form.get("tags")
 
-    if not new_title or not new_title.strip(): # MODIFIED: Validate title for web form update
+    if not new_title or not new_title.strip():
         return "Todo title cannot be empty", 400
-    todo.title = new_title.strip() # Strip title from form update
+    todo.title = new_title.strip()
 
 
     # Update tags (clear existing and add new ones from the form)
@@ -244,7 +254,7 @@ def update_todo_details(todo_id):
             if not tag:
                 tag = Tag(name=tag_name)
                 db.session.add(tag)
-            if tag not in todo.tags: # Defensive check
+            if tag not in todo.tags:
                 todo.tags.append(tag)
     
     db.session.commit()
@@ -253,7 +263,8 @@ def update_todo_details(todo_id):
 
 @app.route("/delete/<int:todo_id>")
 def delete(todo_id):
-    todo = Todo.query.filter_by(id=todo_id).first()
+    # CHANGED: Use db.session.get() for primary key lookup
+    todo = db.session.get(Todo, todo_id)
     if not todo:
         return "Todo not found", 404
     db.session.delete(todo)
@@ -262,7 +273,8 @@ def delete(todo_id):
 
 @app.route("/delete_tag/<int:tag_id>")
 def delete_tag(tag_id):
-    tag = Tag.query.filter_by(id=tag_id).first()
+    # CHANGED: Use db.session.get() for primary key lookup
+    tag = db.session.get(Tag, tag_id)
     if not tag:
         return "Tag not found", 404
 
@@ -282,6 +294,9 @@ def filter_by_tag(tag_name):
 
 
 if __name__ == "__main__":
+    # Lines 298-301: Typically not covered by pytest.
+    # You might consider adding a .coveragerc file to exclude these lines if strictly aiming for 100% reported.
+    # e.g., in .coveragerc: [report] exclude_lines = if __name__ == .*:
     with app.app_context():
         db.create_all()
     app.run(debug=True)
