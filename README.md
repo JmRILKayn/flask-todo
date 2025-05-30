@@ -26,16 +26,36 @@ This project upgrades a basic Flask To-Do app into a more robust and extensible 
 
 ## Setup & Running:
 
-1.  **Clone**: `git clone https://github.com/YOUR_USERNAME/flask-todo.git` (replace `YOUR_USERNAME`)
-2.  **CD**: `cd flask-todo`
-3.  **Env**: `python -m venv venv` & `source venv/bin/activate` (or `.\venv\Scripts\activate` on Windows)
-4.  **Install**: `pip install Flask Flask-SQLAlchemy pytest pytest-flask pytest-cov`
-5.  **Run App**: `python app.py` (access at `http://127.0.0.1:5000/`)
-6.  **Run Tests**: `pytest --cov=app --cov-report=term-missing` (should show 100% coverage)
+1.  **Clone**: `git clone https://github.com/JmRILKayn/flask-todo.git` (Use this URL for your fork or your professor's if your changes are merged to `main`)
+    * `cd flask-todo`
+2.  **Env**: `python -m venv venv` & `venv\Scripts\activate` (on Windows) or `source venv/bin/activate` (on Unix/macOS)
+3.  **Install**: `pip install Flask Flask-SQLAlchemy pytest pytest-flask pytest-cov`
+4.  **Run App**: `python app.py` (access at `http://127.0.0.1:5000/`)
+    * Initialize Database (first run or after cleaning `db.sqlite`):
+        `python -c "from app import db, app; with app.app_context(): db.create_all(); print('Database initialized.')"`
+5.  **Run Tests**: `pytest --cov=app --cov-report=term-missing` (should show 100% coverage)
+
+---
+
+## Technical Requirements Fulfilled:
+
+This project specifically addresses the following technical requirements:
+
+### 1. API Design:
+* **RESTful Principles:** Utilizes proper resource naming (`/api/v1/todos`, `/api/v1/tags`) and appropriate HTTP methods (GET, POST, PUT/PATCH, DELETE) for resource interaction.
+* **JSON Format:** Implements JSON for both request and response payloads across all API endpoints.
+* **Status Codes:** Includes proper HTTP status codes (e.g., `200 OK`, `201 Created`, `400 Bad Request`, `404 Not Found`, `204 No Content`) for clear API communication.
+* **API Documentation:** Comprehensive API documentation is provided within this `README.md` file (in the "Key Enhancements" section and implicitly throughout the documentation of API endpoints).
+
+### 2. Submission:
+* **Original Repository:** (URL will be provided in final submission/presentation)
+* **Cloned GitHub Repository with Changes:** (URL to your fork/branch will be provided in final submission/presentation)
+* **README.md:** This document itself explains all changes and project details.
+* **Video Presentation:** (Direct link to YouTube/Google-video MP4 file will be provided in final submission/presentation)
+
+---
 
 ## Repository Links
 
-- Original Repository: https://github.com/patrickloeber/flask-todo.git  
-- Forked with Enhancements: https://github.com/JmRILKayn/flask-todo/tree/feature/api-tags-enhancements
-
----
+- Original Repository: `https://github.com/patrickloeber/flask-todo.git`
+- Forked with Enhancements: `https://github.com/JmRILKayn/flask-todo/tree/feature/api-tags-enhancements`
