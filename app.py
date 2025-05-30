@@ -1,13 +1,14 @@
-# app.py (Conceptual state after Commit 6 - this is your final app.py)
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Blueprint, make_response
 from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 
+# /// = relative path, //// = absolute path
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
+# Association table for many-to-many relationship between Todo and Tag
 todo_tags_association = db.Table('todo_tags_association',
     db.Column('todo_id', db.Integer, db.ForeignKey('todo.id'), primary_key=True),
     db.Column('tag_id', db.Integer, db.ForeignKey('tag.id'), primary_key=True)
@@ -17,6 +18,7 @@ class Todo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100))
     complete = db.Column(db.Boolean)
+    # Define the relationship to Tag
     tags = db.relationship('Tag', secondary=todo_tags_association, backref=db.backref('todos', lazy='dynamic'))
 
     def __repr__(self):
@@ -24,7 +26,7 @@ class Todo(db.Model):
 
 class Tag(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), unique=True, nullable=False)
+    name = db.Column(db.String(50), unique=True, nullable=False) # Tag names should be unique
 
     def __repr__(self):
         return f"<Tag {self.name}>"
@@ -32,12 +34,13 @@ class Tag(db.Model):
 # --- API Blueprint Definition ---
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 
+# Helper function to serialize Todo with tags
 def serialize_todo(todo):
     return {
         'id': todo.id,
         'title': todo.title,
         'complete': todo.complete,
-        'tags': [tag.name for tag in todo.tags]
+        'tags': [tag.name for tag in todo.tags] # Include tags
     }
 
 @api_bp.route('/todos', methods=['GET'])
