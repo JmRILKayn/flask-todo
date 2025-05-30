@@ -33,4 +33,9 @@ This project upgrades a basic Flask To-Do app into a more robust and extensible 
 5.  **Run App**: `python app.py` (access at `http://127.0.0.1:5000/`)
 6.  **Run Tests**: `pytest --cov=app --cov-report=term-missing` (should show 100% coverage)
 
+## Repository Links
+
+- Original Repository: https://github.com/patrickloeber/flask-todo.git  
+- Forked with Enhancements: https://github.com/JmRILKayn/flask-todo/tree/feature/api-tags-enhancements
+
 ---
