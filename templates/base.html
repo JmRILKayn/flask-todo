@@ -8,6 +8,60 @@
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/semantic-ui@2.4.2/dist/semantic.min.css">
     <script src="https://cdn.jsdelivr.net/npm/semantic-ui@2.4.2/dist/semantic.min.js"></script>
+    <style>
+        /* Basic styling for the edit form overlay/modal */
+        .edit-form-overlay {
+            display: none; /* Hidden by default */
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+            justify-content: center;
+            align-items: center;
+        }
+        .edit-form-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 5px;
+            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
+        }
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .tag-filter-section {
+            margin-top: 30px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            border: 1px solid #eee;
+        }
+        /* Style for the delete icon within a tag label */
+        .ui.tag.label .delete.icon {
+            cursor: pointer;
+            margin-left: 0.5em; /* Space between text and icon */
+        }
+        .ui.tag.label .delete.icon:hover {
+            color: red; /* Highlight on hover */
+        }
+    </style>
 </head>
 
 <body>
@@ -17,16 +71,38 @@
         <form class="ui form" action="/add" method="post">
             <div class="field">
                 <label>Todo Title</label>
-                <input type="text" name="title" placeholder="Enter Todo..."><br>
+                <input type="text" name="title" placeholder="Enter Todo..." required><br>
             </div>
-            <button class="ui blue button" type="submit">Add</button>
+            <div class="field">
+                <label>Tags (comma-separated, e.g., work, personal)</label>
+                <input type="text" name="tags" placeholder="e.g., work, personal, grocery"><br>
+            </div>
+            <button class="ui blue button" type="submit">Add Todo</button>
         </form>
 
         <hr>
 
+        <div class="tag-filter-section">
+            <h3 class="ui header">Filter by Tag</h3>
+            <div class="ui labels">
+                <a class="ui label" href="/">Show All</a>
+                {% for tag in all_tags %}
+                <a class="ui tag label" href="/filter_by_tag/{{ tag.name }}">
+                    {{ tag.name }}
+                    <span style="display: inline-block;">
+                        <a href="/delete_tag/{{ tag.id }}" style="color: inherit; text-decoration: none;">
+                            <i class="delete icon" style="margin-left: 5px;"
+                               onclick="return confirm('Are you sure you want to delete the tag &quot;{{ tag.name }}&quot;? This will remove it from all todos.');"></i>
+                        </a>
+                    </span>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+
         {% for todo in todo_list %}
         <div class="ui segment">
-            <p class="ui big header">{{todo.id }} | {{ todo.title }}</p>
+            <p class="ui big header" style="display: inline-block; margin-right: 15px;">{{ todo.id }} | {{ todo.title }}</p>
 
             {% if todo.complete == False %}
             <span class="ui gray label">Not Complete</span>
@@ -34,11 +110,92 @@
             <span class="ui green label">Completed</span>
             {% endif %}
 
-            <a class="ui blue button" href="/update/{{ todo.id }}">Update</a>
+            <div style="margin-top: 10px; margin-bottom: 10px;">
+                {% for tag in todo.tags %}
+                <a class="ui tag label" href="/filter_by_tag/{{ tag.name }}">{{ tag.name }}</a>
+                {% endfor %}
+            </div>
+
+            <a class="ui blue button" href="/update_status/{{ todo.id }}">
+                {% if todo.complete == False %}
+                Mark Complete
+                {% else %}
+                Mark Incomplete
+                {% endif %}
+            </a>
+            <button class="ui orange button edit-todo-button"
+                    data-todo-id="{{ todo.id }}"
+                    data-current-title="{{ todo.title }}"
+                    data-current-tags="{% for tag in todo.tags %}{{ tag.name }}{% if not loop.last %}, {% endif %}{% endfor %}">
+                Edit Details
+            </button>
             <a class="ui red button" href="/delete/{{ todo.id }}">Delete</a>
         </div>
         {% endfor %}
+
+        <div id="editTodoModal" class="edit-form-overlay">
+            <div class="edit-form-content">
+                <span class="close-button">&times;</span>
+                <h2 class="ui header">Edit Todo</h2>
+                <form class="ui form" id="editTodoForm" action="" method="post">
+                    <input type="hidden" name="todo_id" id="edit-todo-id">
+                    <div class="field">
+                        <label>Todo Title</label>
+                        <input type="text" name="title" id="edit-todo-title" required>
+                    </div>
+                    <div class="field">
+                        <label>Tags (comma-separated)</label>
+                        <input type="text" name="tags" id="edit-todo-tags">
+                    </div>
+                    <button class="ui green button" type="submit">Save Changes</button>
+                    <button class="ui grey button close-modal-button" type="button">Cancel</button>
+                </form>
+            </div>
+        </div>
     </div>
+
+    <script>
+        // JavaScript for handling the Edit Todo modal
+        document.addEventListener('DOMContentLoaded', function() {
+            const editButtons = document.querySelectorAll('.edit-todo-button');
+            const editModal = document.getElementById('editTodoModal');
+            const closeButton = document.querySelector('.close-button');
+            const cancelButton = document.querySelector('.close-modal-button');
+            const editTodoForm = document.getElementById('editTodoForm');
+            const editTodoId = document.getElementById('edit-todo-id');
+            const editTodoTitle = document.getElementById('edit-todo-title');
+            const editTodoTags = document.getElementById('edit-todo-tags');
+
+            editButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const todoId = this.dataset.todoId;
+                    const currentTitle = this.dataset.currentTitle;
+                    const currentTags = this.dataset.currentTags;
+
+                    editTodoId.value = todoId;
+                    editTodoTitle.value = currentTitle;
+                    editTodoTags.value = currentTags;
+                    editTodoForm.action = "/update_todo_details/" + todoId; // Set form action
+                    editModal.style.display = 'flex'; // Show modal using flexbox for centering
+                });
+            });
+
+            closeButton.addEventListener('click', function() {
+                editModal.style.display = 'none'; // Hide modal
+            });
+
+            cancelButton.addEventListener('click', function() {
+                editModal.style.display = 'none'; // Hide modal
+            });
+
+            // Close modal if clicking outside the content area
+            window.addEventListener('click', function(event) {
+                if (event.target == editModal) {
+                    editModal.style.display = 'none';
+                }
+            });
+        });
+    </script>
 </body>
 
 </html>
